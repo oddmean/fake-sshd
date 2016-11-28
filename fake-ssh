@@ -1,0 +1,69 @@
+#!/bin/bash
+### BEGIN INIT INFO
+# Provides:		fake-ssh
+# Required-Start:	networking
+# Required-Stop:
+# Default-Start:	2 3 4 5
+# Default-Stop:		0 1 6
+# Short-Description: fake ssh daemon
+### END INIT INFO
+
+DAEMON="/usr/local/sbin/fake-ssh"
+CONF_D="/usr/local/etc/fake-ssh"
+DSAKEY="$CONF_D/keys/id_dsa"
+RSAKEY="$CONF_D/keys/id_rsa"
+RUNLOG="/var/log/fake-ssh/attempts.log"
+
+getconfig () {
+    if [ -r $CONF_D/fake-ssh.conf ] ; then
+	for PARM in "auth_delay" "banner" "attempts" "port" "rsa_key" "dsa_key" "timeout" "conn_delay"
+	do
+	varname=$PARM
+	export "$varname=$(grep $PARM $CONF_D/fake-ssh.conf | awk -F= '{print $2}')"
+	done
+	fi
+    rsa_key="${rsa_key:-$RSAKEY}"
+    dsa_key="${dsa_key:-$DSAKEY}"
+}
+
+start () {
+    $DAEMON \
+    -a ${auth_delay:-0} \
+    -b ${banner:-'SSH-2.0-OpenSSH_5.3\n'} \
+    -m ${attempts:-10} \
+    -p ${port:-22} \
+    -r $rsa_key \
+    -d $dsa_key \
+    -t ${timeout:-30} \
+    -w ${conndelay:-0} \
+    1>>$RUNLOG &
+}
+
+stop () {
+	kill -TERM $(pgrep -aP 1 fake-ssh | grep "\-p $port" | cut -d" " -f1) 
+}
+
+getstatus () {
+	pid=$(pgrep -aP 1 fake-ssh | grep "\-p 22" | cut -d" " -f1)
+	status=1
+	[ ! -z $pid ] && status=0
+	[ $status -eq 0 ] && echo "fake-ssh is running with PID: $pid"
+	[ $status -eq 1 ] && echo "fake-ssh is currently not running"
+	exit $status
+}
+getconfig
+
+case $1 in
+	start)
+	    start
+	;;
+	stop)
+	    stop
+	;;
+	status)
+	    getstatus
+	;;
+	*)
+	    echo ${0} ' accepts only start|stop|status commands' && exit 1
+	;;
+esac
